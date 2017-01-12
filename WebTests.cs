@@ -7,14 +7,12 @@ using Owin;
 using SignalXLib.Lib;
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using System.Web.Http;
 using System.Web.Http.SelfHost;
 
@@ -86,21 +84,18 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
             }
 
             public IActorRef MyActorRef { get; set; }
-                
+
             public ProductsController()
             {
                 ServicePointManager.MaxServicePointIdleTime = Timeout.Infinite;
             }
         }
-        
-       
+
         public class DataController : ApiController
         {
             public IEnumerable<object> Get()
             {
-                ClientFilter filter = GetFilter();
-
-                var result =  new List<Client> {
+                var result = new List<Client> {
                 new Client {
                     Name = "Otto Clay",
                     Age = 61,
@@ -204,43 +199,18 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
                 return result.ToArray();
             }
 
-            private ClientFilter GetFilter()
-            {
-                NameValueCollection filter = HttpUtility.ParseQueryString(Request.RequestUri.Query);
-
-                return new ClientFilter
-                {
-                    Name = filter["Name"],
-                    Address = filter["Address"],
-                    Country = (filter["Country"] == "0") ? (Country?)null : (Country)int.Parse(filter["Country"]),
-                    Married = String.IsNullOrEmpty(filter["Married"]) ? (bool?)null : bool.Parse(filter["Married"])
-                };
-            }
-
             public void Post([FromBody]Client client)
             {
-               
             }
-
 
             public void Put(int id, [FromBody]Client editedClient)
             {
-              
-              
-
-                
             }
 
             public void Delete(int id)
             {
-              
-                
             }
-            
-
         }
-
-
 
         public class TestHelper
         {
@@ -249,6 +219,20 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
                 public void Configuration(IAppBuilder app)
                 {
                     app.UseSignalX(new SignalX(""));
+                }
+            }
+
+            public class CustomHeaderHandler : DelegatingHandler
+            {
+                protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+                {
+                    return base.SendAsync(request, cancellationToken)
+                        .ContinueWith((task) =>
+                        {
+                            HttpResponseMessage response = task.Result;
+                            response.Headers.Add("Access-Control-Allow-Origin", "*");
+                            return response;
+                        });
                 }
             }
 
@@ -263,6 +247,7 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
                                     const string baseLink = "api/products/";
                                     var config = new HttpSelfHostConfiguration(serverEndpoint);
                                     config.Routes.MapHttpRoute("API Default", Route, new { id = RouteParameter.Optional });
+                                    config.MessageHandlers.Add(new CustomHeaderHandler());
                                     using (var server = new HttpSelfHostServer(config))
                                     {
                                         await server.OpenAsync();
@@ -299,30 +284,30 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
 							<script src='https://ajax.aspnetcdn.com/ajax/signalr/jquery.signalr-2.2.0.js'></script>
 						    <script src='https://unpkg.com/signalx'></script>
                             <script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular.min.js'></script>
-                            <script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular-route.js'></script>                          
+                            <script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular-route.js'></script>
                             <link type = 'ext/css' rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid.min.css' />
                             <link type = 'text/css' rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid-theme.min.css' />
-                            <script type = 'text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid.min.js'></script>                          
+                            <script type = 'text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid.min.js'></script>
                             </head>
 							<body >
-                            <div ng-app='all' >
 							<div  ng-controller='ActorsCtrl'>
 							    <input ng-model='inp' type='text'/>
 							    <button ng-click='inp=inp+1'>Send Message To Server</button>
-                             
-                            </div> 
-                           </div>
+
+                            </div>
                            <div id='jsGrid'></div>
-							
+
 							<script>
 							    signalx.debug(function (o) { console.log(o); });
                                 signalx.error(function (o) { console.log(o); });
                                 signalx.ready(function (server) {
                                     var app = angular.module('all', ['ngRoute']);
-                            
+
                                    app.controller('ActorsCtrl', function ($scope, $rootScope, $http, $q, $timeout) {
-      
                                     });
+                                    angular.element(function() {
+                                          angular.bootstrap(document, ['all']);
+                                        });
                                     $(function () {
                                             var countries = [
                                                 { Name: '', Id: 0 },
@@ -398,13 +383,12 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
                                                 ]
                                             });
                                         });
-                                });					   
-							</script>  
-                       
+                                });
+							</script>
+
 							</body>
 							</html>";
     }
-
 
     public enum Country
     {
@@ -417,25 +401,13 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
         Russia = 7
     }
 
-    public class ClientFilter
-    {
-
-        public string Name { get; set; }
-        public string Address { get; set; }
-        public Country? Country { get; set; }
-        public bool? Married { get; set; }
-
-    }
-
     public class Client
     {
-
         public int ID { get; set; }
         public string Name { get; set; }
         public int Age { get; set; }
         public Country? Country { get; set; }
         public string Address { get; set; }
         public bool Married { get; set; }
-
     }
 }
