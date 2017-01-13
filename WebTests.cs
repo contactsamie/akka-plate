@@ -3,17 +3,21 @@
 using Akka.Actor;
 using Microsoft.Owin.Hosting;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Newtonsoft.Json;
 using Owin;
 using SignalXLib.Lib;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
+using System.Web.Http.Cors;
 using System.Web.Http.SelfHost;
 
 #endregion
@@ -23,15 +27,25 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
     [TestClass]
     public class WebTests
     {
-        private readonly TestHelper _testHelper = new TestHelper();
+        private readonly TestHelper _testHelper = new WebTests.TestHelper();
 
         [TestMethod]
         public void TestSomething()
         {
-            var server = _testHelper.CreateServer(8018);
+            var server = _testHelper.CreateServer<bool>(8018);
             var result = server(async (client, s, basePath, ui) =>
             {
-                await ui(44111, UI, 1000000, (uiProcess) => { });
+                await ui(44111, _uiClass.UI, 1000000, (uiProcess) => { });
+                return true;
+            }).Result;
+        }
+
+        [TestMethod]
+        public void TestSomething2()
+        {
+            var server = _testHelper.CreateServer<object>(8018);
+            var result = server(async (client, s, basePath, ui) =>
+            {
                 var res = await client.GetAsync(basePath + "DoSomething/1");
                 res.EnsureSuccessStatusCode();
                 var products = await res.Content.ReadAsAsync<object>();
@@ -39,22 +53,46 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
             }).Result;
         }
 
-        public class MyService : IService<object, object>
+        [TestMethod]
+        public void TestSomething3()
+        {
+            var server = _testHelper.CreateServer<List<DataRepo.Client>>(8018);
+            var result = server(async (client, s, basePath, ui) =>
+            {
+                var tasks = Enumerable.Range(1, 1000).Select(async i =>
+                {
+                    var res = await client.GetAsync(basePath + "Get/" + i);
+                    res.EnsureSuccessStatusCode();
+                    var data = await res.Content.ReadAsAsync<DataRepo.Client>();
+                    data.Address = i.ToString();
+                    var jsonString = JsonConvert.SerializeObject(data);
+                    HttpContent httpContent = new StringContent(jsonString);
+                    httpContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                    //add the header with the access token
+                    //hc.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                    await client.PutAsync(basePath + "Put/" + i, httpContent);
+                    // some post stuff
+                });
+                await Task.WhenAll(tasks);
+
+                List<DataRepo.Client> products = new List<DataRepo.Client>();
+                var res2 = await client.GetAsync(basePath + "Get");
+                res2.EnsureSuccessStatusCode();
+                products = await res2.Content.ReadAsAsync<List<DataRepo.Client>>();
+
+                return products;
+            }).Result;
+            foreach (var client in result)
+            {
+                Assert.AreEqual(client.Address, client.ID.ToString());
+            }
+        }
+
+        public class MyService : WebTests.IService<object, object>
         {
             public object Execute(object message)
             {
                 return message;
-            }
-        }
-
-        public class MyActor : ReceiveActor
-        {
-            public MyActor(IService<object, object> service)
-            {
-                ReceiveAny(_ =>
-                {
-                    Sender.Tell(service.Execute(_));
-                });
             }
         }
 
@@ -63,152 +101,106 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
             TR Execute(T message);
         }
 
-        public class ProductsController : ApiController
+        public class DataActor : ReceiveActor
         {
-            [HttpGet]
-            public async Task<HttpResponseMessage> DoSomething(int id)
-            {
-                CreateActorSystem("MyActorSystem");
-                return Request.CreateResponse(HttpStatusCode.OK, await MyActorRef.Ask(id));
-            }
+            private static DataRepo _dataRepo;
 
-            public void CreateActorSystem(string serverActorSystemName, string actorSystemConfig = null)
+            public DataActor(IService<object, object> service)
             {
-                if (MyActorRef == null)
+                _dataRepo = _dataRepo ?? new DataRepo();
+
+                Receive<ActorMessages.DoSomethingMessage>(message =>
+               {
+                   SignalX.RespondToAll("Update", message);
+                   Sender.Tell(service.Execute(message));
+               });
+                Receive<ActorMessages.GetAllMessage>(message =>
                 {
-                    MyActorRef = (string.IsNullOrEmpty(actorSystemConfig)
-                                       ? ActorSystem.Create(serverActorSystemName)
-                                       : ActorSystem.Create(serverActorSystemName, actorSystemConfig))
-                                       .ActorOf(Props.Create(() => new MyActor(new MyService())));
-                }
-            }
-
-            public IActorRef MyActorRef { get; set; }
-
-            public ProductsController()
-            {
-                ServicePointManager.MaxServicePointIdleTime = Timeout.Infinite;
+                    SignalX.RespondToAll("Update", message);
+                    Sender.Tell(_dataRepo.Result);
+                });
+                Receive<ActorMessages.GetMessage>(message =>
+                {
+                    SignalX.RespondToAll("Update", message);
+                    Sender.Tell(_dataRepo.Result.FirstOrDefault(x => x.ID == message.Id));
+                });
+                Receive<ActorMessages.PostMessage>(message =>
+                {
+                    SignalX.RespondToAll("Update", message);
+                    _dataRepo.Result.Add(message.Client);
+                    Sender.Tell(true);
+                });
+                Receive<ActorMessages.PutMessage>(message =>
+                {
+                    SignalX.RespondToAll("Update", message);
+                    var index = _dataRepo.Result.FindIndex(x => x.ID == message.Id);
+                    message.Client.ID = message.Id;
+                    _dataRepo.Result[index] = message.Client;
+                    Sender.Tell(true);
+                });
+                Receive<ActorMessages.DeleteMessage>(message =>
+                {
+                    SignalX.RespondToAll("Update", message);
+                    _dataRepo.Result.Remove(_dataRepo.Result.Find(x => x.ID == message.Id));
+                    Sender.Tell(true);
+                });
             }
         }
 
         public class DataController : ApiController
         {
-            public IEnumerable<object> Get()
+            public DataController()
             {
-                var result = new List<Client> {
-                new Client {
-                    Name = "Otto Clay",
-                    Age = 61,
-                    Country = Country.Canada,
-                    Address = "Ap #897-1459 Quam Avenue",
-                    Married = false
-                },
-                new Client {
-                    Name = "Lacey Hess",
-                    Age = 29,
-                    Country = Country.Russia,
-                    Address = "Ap #365-8835 Integer St.",
-                    Married = false
-                },
-                new Client {
-                    Name = "Timothy Henson",
-                    Age = 78,
-                    Country = Country.UnitedStates,
-                    Address = "911-5143 Luctus Ave",
-                    Married = false
-                },
-                new Client {
-                    Name = "Ramona Benton",
-                    Age = 43,
-                    Country = Country.Brazil,
-                    Address = "Ap #614-689 Vehicula Street",
-                    Married = true
-                },
-                new Client {
-                    Name = "Ezra Tillman",
-                    Age = 51,
-                    Country = Country.UnitedStates,
-                    Address = "P.O. Box 738, 7583 Quisque St.",
-                    Married = true
-                },
-                new Client {
-                    Name = "Dante Carter",
-                    Age = 59,
-                    Country = Country.UnitedStates,
-                    Address = "P.O. Box 976, 6316 Lorem, St.",
-                    Married = false
-                },
-                new Client {
-                    Name = "Christopher Mcclure",
-                    Age = 58,
-                    Country = Country.UnitedStates,
-                    Address = "847-4303 Dictum Av.",
-                    Married = true
-                },
-                new Client {
-                    Name = "Ruby Rocha",
-                    Age = 62,
-                    Country = Country.Canada,
-                    Address = "5212 Sagittis Ave",
-                    Married = false
-                },
-                new Client {
-                    Name = "Imelda Hardin",
-                    Age = 39,
-                    Country = Country.Brazil,
-                    Address = "719-7009 Auctor Av.",
-                    Married = false
-                },
-                new Client {
-                    Name = "Jonah Johns",
-                    Age = 28,
-                    Country = Country.Brazil,
-                    Address = "P.O. Box 939, 9310 A Ave",
-                    Married = false
-                },
-                new Client {
-                    Name = "Herman Rosa",
-                    Age = 49,
-                    Country = Country.Russia,
-                    Address = "718-7162 Molestie Av.",
-                    Married = true
-                },
-                new Client {
-                    Name = "Arthur Gay",
-                    Age = 20,
-                    Country = Country.Russia,
-                    Address = "5497 Neque Street",
-                    Married = false
-                },
-                new Client {
-                    Name = "Xena Wilkerson",
-                    Age = 63,
-                    Country = Country.UnitedStates,
-                    Address = "Ap #303-6974 Proin Street",
-                    Married = true
-                },
-                new Client {
-                    Name = "Lilah Atkins",
-                    Age = 33,
-                    Country = Country.Brazil,
-                    Address = "622-8602 Gravida Ave",
-                    Married = true
+                ServicePointManager.MaxServicePointIdleTime = Timeout.Infinite;
+                _actorSystemHelper = _actorSystemHelper ?? new ActorSystemHelper();
+                if (_actorSystemHelper.MyActorRef == null)
+                {
+                    _actorSystemHelper.CreateActorAndSystem(() => new DataActor(new MyService()), "MyActorSystem");
+                    SignalX.Server("Update", (request) =>
+                    {
+                        request.RespondToAll(request.Message);
+                    });
                 }
-            };
+            }
 
+            private static WebTests.ActorSystemHelper _actorSystemHelper;
+
+            [HttpGet]
+            public async Task<HttpResponseMessage> DoSomething(int id)
+            {
+                return Request.CreateResponse(HttpStatusCode.OK, await _actorSystemHelper.MyActorRef.Ask(id));
+            }
+
+            [HttpGet]
+            public async Task<object> Get(int id)
+            {
+                var result = await _actorSystemHelper.MyActorRef.Ask(new ActorMessages.GetMessage(id));
+                return result;
+            }
+
+            [HttpGet]
+            public async Task<IEnumerable<object>> Get()
+            {
+                var result = await _actorSystemHelper.MyActorRef.Ask<List<DataRepo.Client>>(new ActorMessages.GetAllMessage());
                 return result.ToArray();
             }
 
-            public void Post([FromBody]Client client)
+            [HttpPost]
+            public Task Post([FromBody]DataRepo.Client client)
             {
+                return _actorSystemHelper.MyActorRef.Ask(new ActorMessages.PostMessage(client));
             }
 
-            public void Put(int id, [FromBody]Client editedClient)
+            [HttpPut]
+            public Task Put(int id, [FromBody]DataRepo.Client editedClient)
             {
+                return _actorSystemHelper.MyActorRef.Ask(new ActorMessages.PutMessage(id, editedClient));
             }
 
-            public void Delete(int id)
+            [HttpDelete]
+            public Task Delete(int id)
             {
+                return _actorSystemHelper.MyActorRef.Ask(new ActorMessages.DeleteMessage(id));
             }
         }
 
@@ -222,32 +214,38 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
                 }
             }
 
-            public class CustomHeaderHandler : DelegatingHandler
-            {
-                protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
-                {
-                    return base.SendAsync(request, cancellationToken)
-                        .ContinueWith((task) =>
-                        {
-                            HttpResponseMessage response = task.Result;
-                            response.Headers.Add("Access-Control-Allow-Origin", "*");
-                            return response;
-                        });
-                }
-            }
+            //public class CustomHeaderHandler : DelegatingHandler
+            //{
+            //    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+            //    {
+            //        return base.SendAsync(request, cancellationToken)
+            //            .ContinueWith((task) =>
+            //            {
+            //                HttpResponseMessage response = task.Result;
+            //                //response.Headers.Add("Access-Control-Allow-Origin", "*");
+            //                //response.Headers.Add("Cache-Control", "no-cache");
+            //                //response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+            //                //response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Accept");
+            //                //response.Headers.Add("Access-Control-Max-Age", "1728000");
+            //                return response;
+            //            });
+            //    }
+            //}
 
-            private const string Route = "api/{controller}/{id}";
+            private const string Route = "api/{controller}/{action}/{id}";
 
-            public Func<Func<HttpClient, HttpSelfHostServer, string, Func<int, string, int, Action<Process>, Task<object>>, Task<object>>, Task<object>> CreateServer(int serverPort, string domain = "http://localhost")
+            public Func<Func<HttpClient, HttpSelfHostServer, string, Func<int, string, int, Action<Process>, Task<T>>, Task<T>>, Task<T>> CreateServer<T>(int serverPort, string domain = "http://localhost")
             {
                 return async (m) =>
                                 {
                                     var serverEndpoint = domain + ":" + serverPort + "/";
 
-                                    const string baseLink = "api/products/";
+                                    const string baseLink = "api/data/";
                                     var config = new HttpSelfHostConfiguration(serverEndpoint);
                                     config.Routes.MapHttpRoute("API Default", Route, new { id = RouteParameter.Optional });
-                                    config.MessageHandlers.Add(new CustomHeaderHandler());
+                                    //config.MessageHandlers.Add(new CustomHeaderHandler());
+                                    var cors = new EnableCorsAttribute("*", "*", "*");
+                                    config.EnableCors(cors);
                                     using (var server = new HttpSelfHostServer(config))
                                     {
                                         await server.OpenAsync();
@@ -270,144 +268,83 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
                                                  await Task.Delay(TimeSpan.FromMilliseconds(delayMs));
                                                  uiExec(proc);
                                              }
-                                             return true;
+                                             //todo fix this
+                                             return default(T);
                                          });
                                     }
                                 };
             }
         }
 
-        private string UI = @"<!DOCTYPE html>
-							<html>
-                            <head>
-                               <script src='https://ajax.aspnetcdn.com/ajax/jquery/jquery-1.9.0.min.js'></script>
-							<script src='https://ajax.aspnetcdn.com/ajax/signalr/jquery.signalr-2.2.0.js'></script>
-						    <script src='https://unpkg.com/signalx'></script>
-                            <script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular.min.js'></script>
-                            <script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular-route.js'></script>
-                            <link type = 'ext/css' rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid.min.css' />
-                            <link type = 'text/css' rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid-theme.min.css' />
-                            <script type = 'text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jsgrid/1.5.1/jsgrid.min.js'></script>
-                            </head>
-							<body >
-							<div  ng-controller='ActorsCtrl'>
-							    <input ng-model='inp' type='text'/>
-							    <button ng-click='inp=inp+1'>Send Message To Server</button>
+        public class ActorSystemHelper
+        {
+            public IActorRef MyActorRef { get; set; }
 
-                            </div>
-                           <div id='jsGrid'></div>
+            public void CreateActorAndSystem<T>(Expression<Func<T>> actorFunc, string serverActorSystemName, SupervisorStrategy supervisorStrategy = null, string actorSystemConfig = null) where T : ActorBase
+            {
+                if (MyActorRef == null)
+                {
+                    MyActorRef = (string.IsNullOrEmpty(actorSystemConfig)
+                            ? ActorSystem.Create(serverActorSystemName)
+                            : ActorSystem.Create(serverActorSystemName, actorSystemConfig))
+                        .ActorOf(Props.Create(actorFunc, supervisorStrategy), typeof(T).Name);
+                }
+            }
+        }
 
-							<script>
-							    signalx.debug(function (o) { console.log(o); });
-                                signalx.error(function (o) { console.log(o); });
-                                signalx.ready(function (server) {
-                                    var app = angular.module('all', ['ngRoute']);
+        private readonly UIClass _uiClass = new UIClass();
 
-                                   app.controller('ActorsCtrl', function ($scope, $rootScope, $http, $q, $timeout) {
-                                    });
-                                    angular.element(function() {
-                                          angular.bootstrap(document, ['all']);
-                                        });
-                                    $(function () {
-                                            var countries = [
-                                                { Name: '', Id: 0 },
-                                                { Name: 'United States', Id: 1 },
-                                                { Name: 'Canada', Id: 2 },
-                                                { Name: 'United Kingdom', Id: 3 },
-                                                { Name: 'France', Id: 4 },
-                                                { Name: 'Brazil', Id: 5 },
-                                                { Name: 'China', Id: 6 },
-                                                { Name: 'Russia', Id: 7 }
-                                            ];
+        public class ActorMessages
+        {
+            public class GetAllMessage
+            {
+            }
 
-                                            $('#jsGrid').jsGrid({
-                                                height: '50%',
-                                                width: '100%',
+            public class GetMessage
+            {
+                public GetMessage(int id)
+                {
+                    Id = id;
+                }
 
-                                                filtering: true,
-                                                inserting: true,
-                                                editing: true,
-                                                sorting: true,
-                                                paging: true,
-                                                autoload: true,
+                public int Id { get; }
+            }
 
-                                                pageSize: 10,
-                                                pageButtonCount: 5,
+            public class PostMessage
+            {
+                public PostMessage(DataRepo.Client client)
+                {
+                    Client = client;
+                }
 
-                                                deleteConfirm: 'Do you really want to delete client?',
+                public DataRepo.Client Client { get; }
+            }
 
-                                                controller: {
-                                                    loadData: function (filter) {
-                                                        return $.ajax({
-                                                            type: 'GET',
-                                                            url:'http://localhost:8018/api/data/',
-                                                            data: filter,
-                                                            dataType: 'json'
-                                                        });
-                                                    },
+            public class PutMessage
+            {
+                public PutMessage(int id, DataRepo.Client client)
+                {
+                    Client = client;
+                    Id = id;
+                }
 
-                                                    insertItem: function (item) {
-                                                        return $.ajax({
-                                                            type: 'POST',
-                                                            url: 'http://localhost:8018/api/data/',
-                                                            data: item,
-                                                            dataType: 'json'
-                                                        });
-                                                    },
+                public DataRepo.Client Client { get; }
+                public int Id { get; }
+            }
 
-                                                    updateItem: function (item) {
-                                                        return $.ajax({
-                                                            type: 'PUT',
-                                                            url: 'http://localhost:8018/api/data/'+ item.ID,
-                                                            data: item,
-                                                            dataType: 'json'
-                                                        });
-                                                    },
+            public class DeleteMessage
+            {
+                public DeleteMessage(int id)
+                {
+                    Id = id;
+                }
 
-                                                    deleteItem: function (item) {
-                                                        return $.ajax({
-                                                            type: 'DELETE',
-                                                            url: 'http://localhost:8018/api/data/' + item.ID,
-                                                            dataType: 'json'
-                                                        });
-                                                    }
-                                                },
+                public int Id { get; }
+            }
 
-                                                fields: [
-                                                    { name: 'Name', type: 'text', width: 150 },
-                                                    { name: 'Age', type: 'number', width: 50, filtering: false },
-                                                    { name: 'Address', type: 'text', width: 200 },
-                                                    { name: 'Country', type: 'select', items: countries, valueField: 'Id', textField: 'Name' },
-                                                    { name: 'Married', type: 'checkbox', title: 'Is Married', sorting: false },
-                                                    { type: 'control' }
-                                                ]
-                                            });
-                                        });
-                                });
-							</script>
-
-							</body>
-							</html>";
-    }
-
-    public enum Country
-    {
-        UnitedStates = 1,
-        Canada = 2,
-        UnitedKingdom = 3,
-        France = 4,
-        Brazil = 5,
-        China = 6,
-        Russia = 7
-    }
-
-    public class Client
-    {
-        public int ID { get; set; }
-        public string Name { get; set; }
-        public int Age { get; set; }
-        public Country? Country { get; set; }
-        public string Address { get; set; }
-        public bool Married { get; set; }
+            public class DoSomethingMessage
+            {
+            }
+        }
     }
 }
