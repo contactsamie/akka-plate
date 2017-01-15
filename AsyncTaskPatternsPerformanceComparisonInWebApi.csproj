@@ -165,6 +165,8 @@
     <Compile Include="DataRepo.cs" />
     <Compile Include="DataService.cs" />
     <Compile Include="IDataService.cs" />
+    <Compile Include="IUiNotificationService.cs" />
+    <Compile Include="SignalXNotificationService.cs" />
     <Compile Include="TestHelper.cs" />
     <Compile Include="UIClass.cs" />
     <Compile Include="WebTests.cs" />

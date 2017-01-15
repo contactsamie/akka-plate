@@ -5,22 +5,25 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
 using Akka.Actor;
+using AkkaBootCampThings;
 using SignalXLib.Lib;
 
-namespace AkkaBootCampThings
+namespace AsyncTaskPatternsPerformanceComparisonInWebApi
 {
     public class DataController : ApiController
     {
+        private readonly IUiNotificationService _notificationService;
         public DataController()
         {
+            _notificationService=new SignalXNotificationService();
             ServicePointManager.MaxServicePointIdleTime = Timeout.Infinite;
             if (ActorSystemThings.MyActorRef != null) return;
-            SignalX.Server("Update", request => { request.RespondToAll(request.Message); });
+            SignalX.Server("Update", request =>
+            {
+                request.RespondToAll(request.Message);
+            });
             ActorSystemThings.ActorSystem = ActorSystemThings.ActorSystem ?? ActorSystem.Create("MyActorSystem");
-            ActorSystemThings.MyActorRef = ActorSystemThings.MyActorRef ??
-                                           ActorSystemThings.ActorSystem.ActorOf(
-                                               Props.Create(() => new DataActor(new DataService())),
-                                               typeof (DataActor).Name);
+            ActorSystemThings.MyActorRef = ActorSystemThings.MyActorRef ??ActorSystemThings.ActorSystem.ActorOf(Props.Create(() => new DataActor(new DataService(_notificationService))),typeof (DataActor).Name);
         }
 
         [HttpGet]

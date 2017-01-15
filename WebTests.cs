@@ -24,8 +24,7 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
             var server = TestHelper.CreateServer(8018);
             server(async (client, s, route, ui) =>
             {
-                await
-                    ui(44111, UIClass.UI, null, 1000000, uiProcess => { }, app => { app.UseSignalX(new SignalX("")); });
+                await ui(44111, UIClass.UI, null, 1000000, uiProcess => { }, app => { app.UseSignalX(new SignalX("")); });
                 return true;
             }).Wait();
         }
