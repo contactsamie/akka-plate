@@ -156,7 +156,16 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="ActorMessages.cs" />
+    <Compile Include="ActorSystemThings.cs" />
+    <Compile Include="DataActor.cs" />
+    <Compile Include="DataController.cs" />
+    <Compile Include="DataItemActor.cs" />
+    <Compile Include="DataQueryActor.cs" />
     <Compile Include="DataRepo.cs" />
+    <Compile Include="DataService.cs" />
+    <Compile Include="IDataService.cs" />
+    <Compile Include="TestHelper.cs" />
     <Compile Include="UIClass.cs" />
     <Compile Include="WebTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
