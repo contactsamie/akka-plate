@@ -2,7 +2,7 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
 {
     public class UIClass
     {
-        public string UI = @"<!DOCTYPE html>
+        public static string UI = @"<!DOCTYPE html>
 							<html>
                             <head>
 <style>
