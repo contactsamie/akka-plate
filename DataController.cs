@@ -33,18 +33,15 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
         }
 
         [HttpGet]
-        public async Task<object> Get(string id)
+        public Task<DataRepo.Client> Get(string id)
         {
-            var result = await ActorSystemThings.MyActorRef.Ask(new ActorMessages.GetMessage(id));
-            return result;
+            return ActorSystemThings.MyActorRef.Ask<DataRepo.Client>(new ActorMessages.GetMessage(id));
         }
 
         [HttpGet]
-        public async Task<IEnumerable<object>> Get()
+        public Task<List<DataRepo.Client>> Get()
         {
-            var result =
-                await ActorSystemThings.MyActorRef.Ask<List<DataRepo.Client>>(new ActorMessages.GetAllMessage());
-            return result.ToArray();
+            return ActorSystemThings.MyActorRef.Ask<List<DataRepo.Client>>(new ActorMessages.GetAllMessage());
         }
 
         [HttpPost]

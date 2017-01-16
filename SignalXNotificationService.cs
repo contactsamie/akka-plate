@@ -6,7 +6,7 @@ namespace AkkaBootCampThings
     {
         public void Notify(string name, object message)
         {
-            SignalX.RespondToAll("Get", message);
+            SignalX.RespondToAll(name, message);
         }
     }
 }

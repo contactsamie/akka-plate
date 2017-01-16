@@ -35,7 +35,6 @@ namespace AkkaBootCampThings
 
         private void Processing()
         {
-               
             Receive<ActorMessages.DoSomethingMessage>(message =>
             {
                 Sender.Tell(_service.DoSomething(message));
