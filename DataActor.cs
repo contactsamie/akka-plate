@@ -19,9 +19,9 @@ namespace AkkaBootCampThings
 
         private void Initializing()
         {
-            Self.Tell(new ActorMessages.InitializeInventoriesFromStorageMessage());
+            Self.Tell(new InitializeInventoriesFromStorageMessage());
 
-            Receive<ActorMessages.InitializeInventoriesFromStorageMessage>(message =>
+            Receive<InitializeInventoriesFromStorageMessage>(message =>
             {
                 var dataList = _service.GetAll(message);
                     
@@ -35,16 +35,16 @@ namespace AkkaBootCampThings
 
         private void Processing()
         {
-            Receive<ActorMessages.DoSomethingMessage>(message =>
+            Receive<DoSomethingMessage>(message =>
             {
                 Sender.Tell(_service.DoSomething(message));
             });
                 
-            Receive<ActorMessages.IQueryRequestMessage>(message =>
+            Receive<IQueryRequestMessage>(message =>
             {
                 _dataQueryActor.Forward(message);
             });
-            Receive<ActorMessages.IUpdateRequestMessage>(message =>
+            Receive<IUpdateRequestMessage>(message =>
             {
                 var actorRef = GetOrActorRef(message.Id.ToString());
                 actorRef.Forward(message);

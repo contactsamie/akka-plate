@@ -14,17 +14,17 @@ namespace AkkaBootCampThings
             _id = productId;
             LoadData(service);
                 
-            Receive<ActorMessages.PostMessage>(message =>
+            Receive<PostMessage>(message =>
             {
                 Sender.Tell(service.Post(message, message.Client));
                 LoadData(service);
             });
-            Receive<ActorMessages.PutMessage>(message =>
+            Receive<PutMessage>(message =>
             {
                 Sender.Tell(service.Put(message, message.Client, message.Id));
                 LoadData(service);
             });
-            Receive<ActorMessages.DeleteMessage>(message =>
+            Receive<DeleteMessage>(message =>
             {
                 Sender.Tell(service.Delete(message, message.Id));
                 LoadData(service);

@@ -14,11 +14,11 @@ namespace AkkaBootCampThings
             {
                 _data[message.ID] = message;
             });
-            Receive<ActorMessages.GetMessage>(message =>
+            Receive<GetMessage>(message =>
             {
                 Sender.Tell(_data[message.Id]);
             });
-            Receive<ActorMessages.GetAllMessage>(message =>
+            Receive<GetAllMessage>(message =>
             {
                 Sender.Tell(_data.Select(x => x.Value).ToList());
             });

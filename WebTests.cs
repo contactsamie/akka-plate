@@ -1,11 +1,13 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Akka.Util.Internal;
 using AkkaBootCampThings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
@@ -19,12 +21,61 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
     public class WebTests
     {
         [TestMethod]
+        public void TestSomethingNew()
+        {
+            var server = TestHelper.CreateServer(8018);
+            var result = server(async (client, s, route, ui) =>
+            {
+                var api =
+                    "api/data/SendActorMessage/SendActorMessage?actorSelection=*/DataActor&messageJson={}&messageClassName=" +
+                    typeof(GetAllMessage).AssemblyQualifiedName;
+                HttpResponseMessage res = null;
+                var range = Enumerable.Range(0, 100);
+                var enumerable = range as int[] ?? range.ToArray();
+                foreach (var i in enumerable)
+                {
+                    res = await client.GetAsync(api);
+                    res.EnsureSuccessStatusCode();
+                    Debug.Assert(res != null, "res != null");
+                }
+
+                AppDomain.CurrentDomain.GetAssemblies().SelectMany(ss => ss.GetTypes())
+                    .Where(p => typeof(IActorMessage).IsAssignableFrom(p))
+                    .Where(x => x.AssemblyQualifiedName != typeof(IActorMessage).AssemblyQualifiedName)
+                    .ForEach(x =>
+                    {
+                        var api2 =
+                            "api/data/SendActorMessage/SendActorMessage?actorSelection=*/DataActor&messageJson={Id:123}&messageClassName=" +
+                            x.AssemblyQualifiedName;
+
+                        Parallel.ForEach(enumerable, i =>
+                        {
+                            try
+                            {
+                                res = client.GetAsync(api2).Result;
+                                res.EnsureSuccessStatusCode();
+                                Debug.Assert(res != null, "res != null");
+                            }
+                            catch (Exception e)
+                            {
+                                Console.WriteLine(e);
+                            }
+                        });
+                    });
+
+                var products = await res.Content.ReadAsAsync<object>();
+                return products;
+            }).Result;
+        }
+
+        [TestMethod]
         public void TestSomething()
         {
             var server = TestHelper.CreateServer(8018);
             server(async (client, s, route, ui) =>
             {
-                await ui(44111, UIClass.UI, null, 1000000, uiProcess => { }, app => { app.UseSignalX(new SignalX("")); });
+                await
+                    ui(44111, UIClass.UI, null, 1000000, uiProcess => { }, app => { app.UseSignalX(new SignalX("")); });
                 return true;
             }).Wait();
         }
@@ -72,9 +123,7 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
             }).Result as List<DataRepo.Client>;
             Debug.Assert(result != null, "result != null");
             foreach (var client in result)
-            {
                 Assert.AreEqual(client.Address, client.ID);
-            }
         }
     }
 }
