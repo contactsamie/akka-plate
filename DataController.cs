@@ -56,25 +56,25 @@ namespace AsyncTaskPatternsPerformanceComparisonInWebApi
         }
 
         [HttpGet]
-        public Task<DataRepo.Client> Get(string id)
+        public Task<Client> Get(string id)
         {
-            return ActorSystemThings.MyActorRef.Ask<DataRepo.Client>(new GetMessage(id));
+            return ActorSystemThings.MyActorRef.Ask<Client>(new GetMessage(id));
         }
 
         [HttpGet]
-        public Task<List<DataRepo.Client>> Get()
+        public Task<List<Client>> Get()
         {
-            return ActorSystemThings.MyActorRef.Ask<List<DataRepo.Client>>(new GetAllMessage());
+            return ActorSystemThings.MyActorRef.Ask<List<Client>>(new GetAllMessage());
         }
 
         [HttpPost]
-        public Task Post([FromBody] DataRepo.Client client)
+        public Task Post([FromBody] Client client)
         {
             return ActorSystemThings.MyActorRef.Ask(new PostMessage(client, client.ID));
         }
 
         [HttpPut]
-        public Task Put(string id, [FromBody] DataRepo.Client editedClient)
+        public Task Put(string id, [FromBody] Client editedClient)
         {
             return ActorSystemThings.MyActorRef.Ask(new PutMessage(id, editedClient));
         }

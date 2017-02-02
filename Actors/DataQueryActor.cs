@@ -1,16 +1,16 @@
+using Akka.Actor;
 using System.Collections.Generic;
 using System.Linq;
-using Akka.Actor;
 
 namespace AkkaBootCampThings
 {
     public class DataQueryActor : ReceiveActor
     {
-        private readonly Dictionary<string, DataRepo.Client> _data = new Dictionary<string, DataRepo.Client>();
+        private readonly Dictionary<string, Client> _data = new Dictionary<string, Client>();
 
         public DataQueryActor()
         {
-            Receive<DataRepo.Client>(message =>
+            Receive<Client>(message =>
             {
                 _data[message.ID] = message;
             });

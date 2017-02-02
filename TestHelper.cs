@@ -1,3 +1,5 @@
+using Microsoft.Owin.Hosting;
+using Owin;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -8,8 +10,6 @@ using System.Threading.Tasks;
 using System.Web.Http;
 using System.Web.Http.Cors;
 using System.Web.Http.SelfHost;
-using Microsoft.Owin.Hosting;
-using Owin;
 
 namespace AkkaBootCampThings
 {
@@ -25,14 +25,14 @@ namespace AkkaBootCampThings
                     , Task<object>>
                 , Task<object>> CreateServer(
             int serverPort
-            ,string domain = "http://localhost"
+            , string domain = "http://localhost"
             , string Route = "api/{controller}/{action}/{id}")
         {
             return async m =>
             {
                 var serverEndpoint = domain + ":" + serverPort + "/";
                 var config = new HttpSelfHostConfiguration(serverEndpoint);
-                config.Routes.MapHttpRoute("API Default", Route, new {id = RouteParameter.Optional});
+                config.Routes.MapHttpRoute("API Default", Route, new { id = RouteParameter.Optional });
                 var cors = new EnableCorsAttribute("*", "*", "*");
                 config.EnableCors(cors);
                 using (var server = new HttpSelfHostServer(config))

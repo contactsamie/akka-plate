@@ -6,14 +6,14 @@ namespace AkkaBootCampThings
     {
         private readonly string _id;
         private readonly IActorRef _queryActor;
-        private DataRepo.Client _selfData;
+        private Client _selfData;
 
         public DataItemActor(IDataService<object, object> service, string productId, IActorRef dataQueryActor)
         {
             _queryActor = dataQueryActor;
             _id = productId;
             LoadData(service);
-                
+
             Receive<PostMessage>(message =>
             {
                 Sender.Tell(service.Post(message, message.Client));

@@ -80,11 +80,11 @@ input, button, select {
 
 							<script>
 							    signalx.debug(function (o) { console.log(o); });
-                                signalx.error(function (o) { console.log(o); });   
-                                signalx.client('update',function(response){ 
-                                    console.log('Inside information'); 
+                                signalx.error(function (o) { console.log(o); });
+                                signalx.client('update',function(response){
+                                    console.log('Inside information');
                                     console.log(response);
-                                });                             
+                                });
                                 signalx.ready(function (server) {
                                 var app = angular.module('all', ['ngRoute']);
 
@@ -106,8 +106,8 @@ input, button, select {
                                             ];
 
                                             $( document ).ajaxComplete(function() {
-                                                     signalx.server.update && signalx.server.update('I have made an update',function(response){ 
-                                                        console.log(response); 
+                                                     signalx.server.update && signalx.server.update('I have made an update',function(response){
+                                                        console.log(response);
                                                         $( document ).append(response);
                                                     });
                                             });

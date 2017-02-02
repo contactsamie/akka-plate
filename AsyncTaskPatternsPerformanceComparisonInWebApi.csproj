@@ -156,19 +156,30 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Compile Include="ActorMessages.cs" />
-    <Compile Include="ActorSystemThings.cs" />
-    <Compile Include="DataActor.cs" />
+    <Compile Include="Messages\InitializeInventoriesFromStorageMessage.cs" />
+    <Compile Include="Models\ActorSystemThings.cs" />
+    <Compile Include="Actors\DataActor.cs" />
     <Compile Include="DataController.cs" />
-    <Compile Include="DataItemActor.cs" />
-    <Compile Include="DataQueryActor.cs" />
-    <Compile Include="DataRepo.cs" />
-    <Compile Include="DataService.cs" />
-    <Compile Include="IDataService.cs" />
-    <Compile Include="IUiNotificationService.cs" />
-    <Compile Include="SignalXNotificationService.cs" />
+    <Compile Include="Actors\DataItemActor.cs" />
+    <Compile Include="Actors\DataQueryActor.cs" />
+    <Compile Include="Models\Client.cs" />
+    <Compile Include="Models\Country.cs" />
+    <Compile Include="Models\DataRepo.cs" />
+    <Compile Include="Services\DataService.cs" />
+    <Compile Include="Services\IDataService.cs" />
+    <Compile Include="Services\IUiNotificationService.cs" />
+    <Compile Include="Messages\DeleteMessage.cs" />
+    <Compile Include="Messages\DoSomethingMessage.cs" />
+    <Compile Include="Messages\GetAllMessage.cs" />
+    <Compile Include="Messages\GetMessage.cs" />
+    <Compile Include="Messages\IActorMessage.cs" />
+    <Compile Include="Messages\IQueryRequestMessage.cs" />
+    <Compile Include="Messages\IUpdateRequestMessage.cs" />
+    <Compile Include="Messages\PostMessage.cs" />
+    <Compile Include="Messages\PutMessage.cs" />
+    <Compile Include="Services\SignalXNotificationService.cs" />
     <Compile Include="TestHelper.cs" />
-    <Compile Include="UIClass.cs" />
+    <Compile Include="Services\UIClass.cs" />
     <Compile Include="WebTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

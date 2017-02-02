@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using Akka.Actor;
+using System.Collections.Generic;
 
 namespace AkkaBootCampThings
 {
@@ -24,7 +24,7 @@ namespace AkkaBootCampThings
             Receive<InitializeInventoriesFromStorageMessage>(message =>
             {
                 var dataList = _service.GetAll(message);
-                    
+
                 foreach (var s in dataList)
                 {
                     GetOrActorRef(s.ID.ToString());
@@ -39,7 +39,7 @@ namespace AkkaBootCampThings
             {
                 Sender.Tell(_service.DoSomething(message));
             });
-                
+
             Receive<IQueryRequestMessage>(message =>
             {
                 _dataQueryActor.Forward(message);
@@ -55,7 +55,7 @@ namespace AkkaBootCampThings
         {
             if (_dataItems.ContainsKey(productId)) return _dataItems[productId];
 
-            var productActorRef =Context.ActorOf(Props.Create(() => new DataItemActor(_service, productId, _dataQueryActor)),"DataItemActor_" + productId);
+            var productActorRef = Context.ActorOf(Props.Create(() => new DataItemActor(_service, productId, _dataQueryActor)), "DataItemActor_" + productId);
             _dataItems.Add(productId, productActorRef);
             return _dataItems[productId];
         }
